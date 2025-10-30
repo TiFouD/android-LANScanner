@@ -80,7 +80,14 @@ data class LanDeviceResponse(
 @Serializable
 data class LanDevice(
     val primary_name: String,
-    val l3connectivities: List<L3Connectivity>? = null
+    val l3connectivities: List<L3Connectivity>? = null,
+    val l2ident: L2Ident? = null
+)
+
+@Serializable
+data class L2Ident(
+    val id: String, // MAC address
+    val type: String
 )
 
 @Serializable
@@ -232,8 +239,13 @@ class FreeboxManager(private val context: Context) : Closeable {
 
         return response.result?.mapNotNull { device ->
             val activeIp = device.l3connectivities?.find { it.active }?.addr
-            if (activeIp != null) {
-                DeviceInfo(activeIp, device.primary_name)
+            val macAddress = device.l2ident?.id
+            if (activeIp != null && macAddress != null) {
+                DeviceInfo(
+                    activeIp,
+                    device.primary_name,
+                mac = macAddress
+                )
             } else {
                 null
             }

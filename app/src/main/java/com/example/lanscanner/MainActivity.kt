@@ -267,6 +267,11 @@ fun NetworkScannerScreen(viewModel: MainViewModel = viewModel()) {
 fun DeviceItem(device: DeviceInfo) {
     ListItem(
         headlineContent = { Text(device.hostname) },
-        supportingContent = { Text(device.ip) }
+        supportingContent = {
+            Column {
+                Text("IP : ${device.ip}")
+                Text("MAC : ${device.mac}")
+            }
+        }
     )
 }
