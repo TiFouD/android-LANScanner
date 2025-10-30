@@ -14,6 +14,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Laptop
+import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.Router
+import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -265,7 +269,15 @@ fun NetworkScannerScreen(viewModel: MainViewModel = viewModel()) {
 
 @Composable
 fun DeviceItem(device: DeviceInfo) {
+    val icon = DeviceIconMapper.getIconForDevice(device.mac)
+
     ListItem(
+        leadingContent = {
+            Icon(
+                imageVector = icon,
+                contentDescription = "Icone de l'appareil"
+            )
+        },
         headlineContent = { Text(device.hostname) },
         supportingContent = {
             Column {
