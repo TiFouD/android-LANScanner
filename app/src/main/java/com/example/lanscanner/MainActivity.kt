@@ -14,10 +14,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Laptop
-import androidx.compose.material.icons.filled.PhoneAndroid
-import androidx.compose.material.icons.filled.Router
-import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -58,6 +54,7 @@ sealed class FreeboxAuthState {
 }
 
 
+@Suppress("DEPRECATION")
 class MainViewModel : ViewModel() {
     var freeboxAuthState by mutableStateOf<FreeboxAuthState>(FreeboxAuthState.Idle)
     private var freeboxManager: FreeboxManager? = null

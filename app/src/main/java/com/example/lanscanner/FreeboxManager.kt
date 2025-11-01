@@ -4,23 +4,25 @@ import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.util.Log
-import androidx.lifecycle.viewmodel.compose.viewModel
-import io.ktor.client.*
-import io.ktor.client.call.*
-import io.ktor.client.engine.cio.*
-import io.ktor.client.plugins.contentnegotiation.*
-import io.ktor.client.request.*
-import io.ktor.client.statement.*
-import io.ktor.http.*
-import io.ktor.serialization.kotlinx.json.*
-import io.ktor.websocket.Frame
+import io.ktor.client.HttpClient
+import io.ktor.client.call.body
+import io.ktor.client.engine.cio.CIO
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.request.get
+import io.ktor.client.request.header
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.client.statement.HttpResponse
+import io.ktor.http.ContentType
+import io.ktor.http.contentType
+import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import java.security.MessageDigest
-import java.util.concurrent.CountDownLatch
 import java.io.Closeable
+import java.util.concurrent.CountDownLatch
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
+import androidx.core.content.edit
 
 
 private const val TAG = "FreeboxManager"
@@ -97,6 +99,7 @@ data class L3Connectivity(
 )
 //</editor-fold>
 
+@Suppress("DEPRECATION")
 class FreeboxManager(private val context: Context) : Closeable {
 
     private val nsdManager by lazy {
@@ -119,13 +122,13 @@ class FreeboxManager(private val context: Context) : Closeable {
     var appToken: String?
         get() = sharedPreferences.getString("app_token", null)
         set(value) {
-            sharedPreferences.edit().putString("app_token", value).apply()
+            sharedPreferences.edit { putString("app_token", value) }
         }
 
     private var sessionToken: String? = null
 
 
-    suspend fun discoverFreebox(): NsdServiceInfo? {
+    fun discoverFreebox(): NsdServiceInfo? {
         var serviceInfo: NsdServiceInfo? = null
         val latch = CountDownLatch(1)
 
