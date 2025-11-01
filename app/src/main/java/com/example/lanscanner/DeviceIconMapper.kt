@@ -4,25 +4,31 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.ui.graphics.vector.ImageVector
 
+/**
+ * Object to map MAC addresses (specifically the OUI) to appropriate [ImageVector] icons.
+ */
 object DeviceIconMapper {
 
     val ROUTER_ICON = Icons.Default.Router
     val PC_ICON = Icons.Default.Computer
     val PHONE_ICON = Icons.Default.PhoneAndroid
-    val APPLE_ICON = Icons.Default.PhoneIphone // Ou une icône Apple personnalisée
-    val GOOGLE_ICON = Icons.Default.SmartDisplay // Ou une icône Google
+    val APPLE_ICON = Icons.Default.PhoneIphone
+    val GOOGLE_ICON = Icons.Default.SmartDisplay
     val SAMSUNG_ICON = Icons.Default.Tv
     val TV_ICON = Icons.Default.Tv
     val SMART_DEVICE_ICON = Icons.Default.SettingsRemote
     val CONSOLE_ICON = Icons.Default.VideogameAsset
     val PRINTER_ICON = Icons.Default.Print
-    val NETWORK_ICON = Icons.Default.SettingsEthernet // Pour les cartes réseau génériques
+    val NETWORK_ICON = Icons.Default.SettingsEthernet
     val UNKNOWN_ICON = Icons.Default.QuestionMark
 
     private val ouiToIconMap = mapOf(
-        // == Mise en réseau (Routeurs, Switches, NAS) ==
+        // == Cases where MAC address is not retrieved ==
+        null to UNKNOWN_ICON,
+
+        // == Networking Devices (Routers, Switches, NAS) ==
         "B8:27:EB" to SMART_DEVICE_ICON, // Raspberry Pi
-        "DC:A6:32" to SMART_DEVICE_ICON, // Raspberry Pi (Nouveau)
+        "DC:A6:32" to SMART_DEVICE_ICON, // Raspberry Pi (New)
         "00:11:32" to ROUTER_ICON,     // Synology (NAS)
         "00:14:BF" to ROUTER_ICON,     // Linksys
         "00:25:9C" to ROUTER_ICON,     // Linksys
@@ -39,10 +45,10 @@ object DeviceIconMapper {
         "F0:9F:C2" to ROUTER_ICON,     // Ubiquiti Networks
         "38:07:16" to ROUTER_ICON,     // Ubiquiti Networks
 
-        // == Appareils Apple ==
+        // == Apple Devices ==
         "BC:54:2F" to APPLE_ICON, // Apple
         "FC:D8:48" to APPLE_ICON, // Apple
-        "00:03:93" to APPLE_ICON, // Apple (Ancien)
+        "00:03:93" to APPLE_ICON, // Apple (Old)
         "00:0A:95" to APPLE_ICON, // Apple (AirPort)
         "00:16:CB" to APPLE_ICON, // Apple (iPhone/Mac)
         "00:25:00" to APPLE_ICON, // Apple
@@ -50,7 +56,7 @@ object DeviceIconMapper {
         "88:6B:6E" to APPLE_ICON, // Apple
         "6A:45:55" to APPLE_ICON, // Apple
 
-        // == Appareils Google / Nest ==
+        // == Google / Nest Devices ==
         "A0:B3:95" to GOOGLE_ICON,     // Google (Pixel)
         "00:1A:11" to GOOGLE_ICON,     // Google (Nest)
         "18:B4:30" to GOOGLE_ICON,     // Google (Nest)
@@ -60,12 +66,12 @@ object DeviceIconMapper {
         "CE:19:EF" to GOOGLE_ICON,     // Google (Pixel)
         "5A:14:94" to GOOGLE_ICON,     // Google (Pixel)
 
-        // == Appareils Samsung ==
+        // == Samsung Devices ==
         "E8:B5:A0" to SAMSUNG_ICON, // Samsung (TV)
-        "00:16:DB" to SAMSUNG_ICON, // Samsung (Général)
+        "00:16:DB" to SAMSUNG_ICON, // Samsung (General)
         "00:07:AB" to SAMSUNG_ICON, // Samsung (SmartThings)
-        "00:12:FB" to SAMSUNG_ICON, // Samsung (Téléphones)
-        "BC:A9:93" to SAMSUNG_ICON, // Samsung (Téléphones)
+        "00:12:FB" to SAMSUNG_ICON, // Samsung (Phones)
+        "BC:A9:93" to SAMSUNG_ICON, // Samsung (Phones)
 
         // == Smart Home / IoT ==
         "00:FC:8B" to SMART_DEVICE_ICON, // Amazon (Echo / Kindle)
@@ -79,19 +85,19 @@ object DeviceIconMapper {
         "28:D0:EA" to PHONE_ICON,        // Xiaomi
         "F4:F5:DB" to PHONE_ICON,        // Xiaomi
 
-        // == PC / Composants ==
+        // == PC / Components ==
         "00:0D:3A" to PC_ICON,         // Microsoft (Surface / Xbox)
         "00:50:F2" to PC_ICON,         // Microsoft
         "58:CD:C9" to PC_ICON,         // Microsoft
-        "00:08:C7" to PRINTER_ICON,    // HP (Imprimantes)
+        "00:08:C7" to PRINTER_ICON,    // HP (Printers)
         "00:17:A4" to PC_ICON,         // HP (PC)
         "3C:D9:2B" to PC_ICON,         // HP (PC)
         "00:14:22" to PC_ICON,         // Dell
         "00:1D:09" to PC_ICON,         // Dell
         "00:50:8D" to PC_ICON,         // Lenovo
-        "00:02:B3" to NETWORK_ICON,    // Intel (Cartes réseau)
-        "00:1C:C0" to NETWORK_ICON,    // Intel (Cartes réseau)
-        "00:E0:4C" to NETWORK_ICON,    // Realtek (Très commun)
+        "00:02:B3" to NETWORK_ICON,    // Intel (Network Cards)
+        "00:1C:C0" to NETWORK_ICON,    // Intel (Network Cards)
+        "00:E0:4C" to NETWORK_ICON,    // Realtek (Very common)
 
         // == TV / Consoles ==
         "00:04:27" to TV_ICON,         // Sony (TV)
@@ -104,12 +110,19 @@ object DeviceIconMapper {
         "00:24:1E" to CONSOLE_ICON,    // Nintendo (DS/3DS)
         "B8:8A:E3" to CONSOLE_ICON,    // Nintendo (Switch)
 
-        // == Mobiles (Autres) ==
+        // == Mobile (Others) ==
         "00:1E:10" to PHONE_ICON, // Huawei
         "FC:E9:98" to PHONE_ICON, // Huawei
     )
-    fun getIconForDevice(macAddress: String): ImageVector {
-        if (macAddress.length < 8) {
+
+    /**
+     * Returns an [ImageVector] icon based on the provided MAC address's OUI (Organizationally Unique Identifier).
+     *
+     * @param macAddress The MAC address of the device. Can be null.
+     * @return An [ImageVector] representing the device type, or [UNKNOWN_ICON] if the MAC address is null or not recognized.
+     */
+    fun getIconForDevice(macAddress: String?): ImageVector {
+        if (macAddress == null || macAddress.length < 8) {
             return UNKNOWN_ICON
         }
 

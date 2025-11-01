@@ -2,6 +2,7 @@ package com.example.lanscanner
 
 import android.content.Context
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
@@ -49,22 +50,60 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/**
+ * Sealed class representing the different authentication states with the Freebox.
+ */
 sealed class FreeboxAuthState {
+    /**
+     * Initial state, no action has been taken.
+     */
     object Idle : FreeboxAuthState()
+    /**
+     * Freebox discovery is in progress.
+     */
     object Discovering : FreeboxAuthState()
+    /**
+     * Authorization is pending on the Freebox.
+     *
+     * @param trackId The tracking ID for the authorization process.
+     */
     data class Authorizing(val trackId: Int) : FreeboxAuthState()
+    /**
+     * Freebox is authorized and connected.
+     */
     object Authorized : FreeboxAuthState()
+    /**
+     * An error occurred during the Freebox authentication process.
+     *
+     * @param message A description of the error.
+     */
     data class Error(val message: String) : FreeboxAuthState()
 }
 
 
+/**
+ * ViewModel for the main activity, handling network scanning and Freebox authentication logic.
+ */
 @Suppress("DEPRECATION")
 class MainViewModel : ViewModel() {
+    /**
+     * The current authentication state with the Freebox.
+     */
     var freeboxAuthState by mutableStateOf<FreeboxAuthState>(FreeboxAuthState.Idle)
     private var freeboxManager: FreeboxManager? = null
+    private var networkScanner: NetworkScanner? = null
     private var freeboxApiUrl: String? = null
+    /**
+     * List of discovered network devices.
+     */
     var discoveredDevices by mutableStateOf<List<DeviceInfo>>(emptyList())
 
+    /**
+     * Returns an instance of [FreeboxManager], creating it if it doesn't exist.
+     *
+     * @param context The application context.
+     * @return The [FreeboxManager] instance.
+     */
     private fun getManager(context: Context): FreeboxManager {
         if (freeboxManager == null) {
             freeboxManager = FreeboxManager(context.applicationContext)
@@ -72,35 +111,73 @@ class MainViewModel : ViewModel() {
         return freeboxManager!!
     }
 
+    /**
+     * Returns an instance of [NetworkScanner], creating it if it doesn't exist.
+     *
+     * @param context The application context.
+     * @return The [NetworkScanner] instance.
+     */
+    private fun getScanner(context : Context): NetworkScanner {
+        if (networkScanner == null) {
+            networkScanner = NetworkScanner(context.applicationContext)
+        }
+        return networkScanner!!
+    }
+
+    /**
+     * Initiates the Freebox authentication process. If a Freebox is not found,
+     * it falls back to a general network scan.
+     *
+     * @param context The application context.
+     */
     fun startFreeboxAuth(context: Context) {
         val manager = getManager(context)
+        val scanner = getScanner(context)
 
         viewModelScope.launch {
             freeboxAuthState = FreeboxAuthState.Discovering
-            // Switch to the IO dispatcher for network operations
-            withContext(Dispatchers.IO) {
-                val serviceInfo = manager.discoverFreebox()
-                if (serviceInfo != null) {
-                    freeboxApiUrl = "http://${serviceInfo.host.hostAddress}:${serviceInfo.port}"
-                    if (manager.appToken != null) {
-                        // We already have a token, try to open a session directly
-                        if (manager.openSession(freeboxApiUrl!!)) {
+
+            // Perform discovery on IO dispatcher
+            /*val serviceInfo = withContext(Dispatchers.IO) {
+                // Replace with actual discovery logic if available, currently null
+                //null
+            }*/
+            val serviceInfo = manager.discoverFreebox()
+
+            if (serviceInfo != null) {
+                freeboxApiUrl = "http://${serviceInfo.host.hostAddress}:${serviceInfo.port}"
+                if (manager.appToken != null) {
+                    if (manager.openSession(freeboxApiUrl!!)) {
+                        withContext(Dispatchers.Main) {
                             freeboxAuthState = FreeboxAuthState.Authorized
                             fetchDevices()
-                        } else {
-                            // Token might be invalid, re-authorize
-                            requestAuthorization(manager)
                         }
                     } else {
                         requestAuthorization(manager)
                     }
                 } else {
-                    freeboxAuthState = FreeboxAuthState.Error("Impossible de trouver la Freebox")
+                    requestAuthorization(manager)
+                }
+            } else {
+                Log.w("MainViewModel", "Freebox not found. Starting general scan...")
+
+                val genericDevices = withContext(Dispatchers.IO) {
+                    scanner.startScan()
+                }
+
+                withContext(Dispatchers.Main) {
+                    discoveredDevices = genericDevices
+                    freeboxAuthState = FreeboxAuthState.Authorized
                 }
             }
         }
     }
 
+    /**
+     * Requests authorization from the Freebox.
+     *
+     * @param manager The [FreeboxManager] instance.
+     */
     private suspend fun requestAuthorization(manager: FreeboxManager) {
         val authResponse = manager.requestAuthorization(freeboxApiUrl!!)
         if (authResponse.success) {
@@ -111,6 +188,12 @@ class MainViewModel : ViewModel() {
         }
     }
 
+    /**
+     * Tracks the authorization progress with the Freebox until it's granted, denied, or times out.
+     *
+     * @param manager The [FreeboxManager] instance.
+     * @param trackId The tracking ID for the authorization process.
+     */
     private fun trackAuthorization(manager: FreeboxManager, trackId: Int) {
         viewModelScope.launch(Dispatchers.IO) {
             while (freeboxAuthState is FreeboxAuthState.Authorizing) {
@@ -145,6 +228,10 @@ class MainViewModel : ViewModel() {
         }
     }
 
+    /**
+     * Fetches the list of LAN devices from the Freebox.
+     * Requires an active session.
+     */
     fun fetchDevices() {
         freeboxManager ?: return
         viewModelScope.launch(Dispatchers.IO) {
@@ -152,6 +239,11 @@ class MainViewModel : ViewModel() {
         }
     }
 
+    /**
+     * Clears the stored Freebox authorization and resets the UI state.
+     *
+     * @param context The application context.
+     */
     fun forgetFreebox(context: Context) {
         val manager = getManager(context)
         viewModelScope.launch {
@@ -161,6 +253,9 @@ class MainViewModel : ViewModel() {
         }
     }
 
+    /**
+     * Closes the FreeboxManager when the ViewModel is cleared.
+     */
     override fun onCleared() {
         super.onCleared()
         freeboxManager?.close()
@@ -168,7 +263,18 @@ class MainViewModel : ViewModel() {
 }
 
 
+/**
+ * Activité principale de l'application. Elle configure le contenu de l'interface utilisateur
+ * en utilisant Jetpack Compose et affiche le [NetworkScannerScreen].
+ */
 class MainActivity : ComponentActivity() {
+    /**
+     * Appelé lorsque l'activité est créée pour la première fois.
+     *
+     * @param savedInstanceState Si l'activité est recréée après avoir été précédemment détruite,
+     *                           il s'agit du Bundle que l'activité a fourni pour l'enregistrer son état.
+     *                           Sinon, c'est null.
+     */
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -179,6 +285,12 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/**
+ * Écran principal du scanner de réseau, affichant l'état de la connexion Freebox
+ * et la liste des appareils découverts.
+ *
+ * @param viewModel Le [MainViewModel] qui gère la logique d'état et d'interaction.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NetworkScannerScreen(viewModel: MainViewModel = viewModel()) {
@@ -198,7 +310,7 @@ fun NetworkScannerScreen(viewModel: MainViewModel = viewModel()) {
                     Box {
                         IconButton(onClick = { menuExpanded = true }) {
                             Icon(
-                                imageVector = Icons.Default.MoreVert, // <- Ceci vient de l'import
+                                imageVector = Icons.Default.MoreVert,
                                 contentDescription = "Options"
                             )
                         }
@@ -268,6 +380,11 @@ fun NetworkScannerScreen(viewModel: MainViewModel = viewModel()) {
     }
 }
 
+/**
+ * Un composable qui affiche un seul élément d'appareil découvert.
+ *
+ * @param device Les informations sur l'appareil à afficher.
+ */
 @Composable
 fun DeviceItem(device: DeviceInfo) {
     val icon = DeviceIconMapper.getIconForDevice(device.mac)
@@ -316,7 +433,7 @@ fun DeviceItem(device: DeviceInfo) {
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "MAC: ${device.mac}",
+                    text = "MAC: ${device.mac ?: "N/A"}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
