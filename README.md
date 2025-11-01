@@ -1,129 +1,81 @@
-# Feuille de Route Complète : Scanner de Réseau WiFi (Android/Kotlin)
+# LAN Scanner pour Android
 
-## Objectif Principal
+[![Kotlin](https://img.shields.io/badge/Kotlin-100%25-blue.svg?style=flat-square&logo=kotlin)](https://kotlinlang.org/)
+[![Jetpack Compose](https://img.shields.io/badge/Jetpack_Compose-UI-4285F4.svg?style=flat-square&logo=android)](https://developer.android.com/jetpack/compose)
+[![Ktor](https://img.shields.io/badge/Ktor-Networking-007FFF.svg?style=flat-square)](https://ktor.io/)
+[![Coroutines](https://img.shields.io/badge/Kotlin-Coroutines-orange.svg?style=flat-square&logo=kotlin)](https://kotlinlang.org/docs/coroutines-overview.html)
+[![License](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
 
-Créer une application Android native en Kotlin qui scanne le réseau WiFi local pour découvrir les appareils connectés, récupérer leur adresse IP, leur hostname, et (si possible) identifier le type d'appareil.
+**LAN Scanner** est une application Android native conçue pour découvrir et afficher les appareils connectés à votre réseau local (WiFi).
 
-## Vos Atouts (sur lesquels capitaliser)
+Ce projet a été développé dans le but de démontrer la mise en œuvre d'une application Android moderne, en se concentrant sur les points suivants :
+* Interaction avec une API réseau locale (Freebox API).
+* Utilisation des bibliothèques Jetpack modernes (Compose, ViewModel).
+* Gestion avancée de l'asynchronisme avec les Coroutines Kotlin.
+* Intégration d'une pile réseau moderne (Ktor + Kotlinx Serialization).
 
-- **Java :** La syntaxe de Kotlin vous sera très familière (c'est du Java "moderne").
-- **Réseau :** Vous comprenez ce qu'est un sous-réseau, un ping, un port, un hostname, et une adresse MAC. C'est 90% de la complexité logique du projet.
+*(Note : L'application est actuellement optimisée pour les réseaux équipés d'une Freebox, voir la Roadmap pour l'implémentation d'un scanner générique).*
 
-## Phase 0 : L'Installation (Le "Jour 0")
+---
 
-Avant d'écrire une ligne de Kotlin, il faut l'environnement.
+## Fonctionnalités Actuelles
 
-- **Télécharger Android Studio :** C'est l'IDE officiel de Google. Prenez la dernière version stable (ex: "Jellyfish" ou plus récent).
-- **Installation :** L'installeur vous guidera pour télécharger le **Android SDK** (les outils pour "compiler" l'application) et les images d'émulateur.
-- **Configurer l'Émulateur :**
-  - Dans Android Studio, allez dans Tools > Device Manager.
-  - Créez un "Virtual Device" (ex: un Pixel 8).
-  - **Important :** L'émulateur est sur son propre sous-réseau virtuel. Pour scanner _votre_ WiFi, il sera **1000 fois plus simple de tester sur un vrai téléphone Android**.
-- **Activer le "Mode Développeur" sur votre téléphone :**
-  - Allez dans Paramètres > À propos du téléphone.
-  - Tapotez 7 fois sur "Numéro de build".
-  - Un nouveau menu "Options pour les développeurs" apparaît. Activez "Débogage USB".
-- **Connecter votre téléphone :** Branchez votre téléphone à votre PC via USB. Android Studio le détectera automatiquement comme cible de déploiement.
+* **Découverte de la Freebox** : Utilise la découverte de services réseau (NSD) pour localiser automatiquement l'API de la Freebox sur le réseau (`_fbx-api._tcp`).
+* **Authentification Sécurisée** : Gère le flux d'autorisation complet avec l'API Freebox, incluant la demande de permission et le suivi de l'approbation sur le boîtier.
+* **Scan Détaillé des Appareils** : Récupère la liste complète des appareils connectés en temps réel depuis l'API du routeur.
+* **Informations Complètes** : Affiche le **nom** (hostname), l'**adresse IP** locale et l'**adresse MAC** de chaque appareil.
+* **Identification du Fabricant** : Utilise l'adresse MAC (via son préfixe OUI) pour identifier le fabricant de l'appareil (Apple, Google, Samsung, etc.) et afficher une icône correspondante.
 
-## Phase 1 : Le Projet "Coquille Vide" (L'UI)
+---
 
-Nous allons créer un projet avec un bouton "Scanner" et une zone de texte pour afficher les résultats. Nous utilisons **Jetpack Compose**, le framework d'UI moderne (très similaire à React si vous connaissez).
+## Pile Technique (Tech Stack)
 
-- **Créer le Projet :**
-  - File > New > New Project...
-  - Choisissez le template **"Empty Activity"** (les templates récents utilisent Compose par défaut).
-  - Langage : Kotlin.
-  - Minimum SDK : API 26 (Oreo) est un bon choix par défaut.
-- **Comprendre le Fichier MainActivity.kt :**
-  - C'est l'écran principal de votre application.
-  - La fonction @Composable est une fonction qui "dessine" un morceau d'interface (comme un composant React).
-  - La fonction setContent { ... } est le point d'entrée de votre UI.
-- **Ajouter les Permissions (Crucial) :**
-  - Votre application doit "demander la permission" d'accéder au réseau.
-  - Ouvrez le fichier app/src/main/AndroidManifest.xml.
-  - Ajoutez ces lignes juste avant la balise &lt;application&gt; (voir le fichier que je vous génère).
-- **Construire l'UI de base :**
-  - Nous avons besoin d'un état pour stocker la liste des appareils trouvés.  
-        // "remember" garde la variable en mémoire, "mutableStateOf" la rend "observable"  
-        // Quand cette liste changera, l'UI se mettra à jour.  
-        var discoveredDevices by remember { mutableStateOf(listOf&lt;String&gt;()) }  
+* **UI** : 100% [Jetpack Compose](https://developer.android.com/jetpack/compose) pour une interface utilisateur déclarative et moderne.
+* **Architecture** : MVVM (Model-View-ViewModel).
+* **Asynchronisme** : [Kotlin Coroutines](https://kotlinlang.org/docs/coroutines-overview.html) pour toutes les opérations réseau et asynchrones (`viewModelScope`, `Dispatchers.IO`).
+* **Réseau** : [Ktor Client](https://ktor.io/docs/client-overview.html) pour les appels HTTP à l'API Freebox.
+* **Parsing JSON** : [Kotlinx Serialization](https://github.com/Kotlin/kotlinx.serialization) pour la sérialisation/désérialisation des requêtes et réponses de l'API.
+* **Dépendances** : `gradle/libs.versions.toml` pour une gestion centralisée des versions.
 
-  - Nous avons besoin d'un Button pour lancer le scan.
-  - Nous avons besoin d'une LazyColumn (une liste optimisée) pour afficher les résultats.
-  - (Je vous fournis ce code de base dans le fichier MainActivity.kt).
+---
 
-## Phase 2 : La Logique Réseau (Le Cœur)
+## 🚧 Roadmap & Work in Progress 🚧
 
-C'est là que vos connaissances réseau entrent en jeu.
+Ce projet est en développement actif. Voici les prochaines étapes prévues pour améliorer l'application :
 
-- **Le Piège Mortel : Le Thread Principal (Main Thread)**
-  - Android est strict : **toute opération longue (réseau, disque) est INTERDITE sur le thread principal (UI)**. Si vous le faites, votre application plantera (erreur NetworkOnMainThreadException).
-  - **Solution :** Les **Coroutines Kotlin**. C'est la gestion moderne de l'asynchronisme (l'équivalent des async/await en JS ou des Threads en Java, mais en beaucoup plus simple).
-- **Créer une classe NetworkScanner :**
-  - Pour garder le code propre, n'écrivez pas la logique réseau dans MainActivity.kt.
-  - Créez un nouveau fichier NetworkScanner.kt (File > New > Kotlin Class/File).
-- **Étape 2a : Trouver le sous-réseau à scanner**
-  - L'application doit connaître sa propre IP pour deviner le sous-réseau (ex: si mon tel est 192.168.1.50, je dois scanner 192.168.1.1 à 192.168.1.254).
-  - Vous aurez besoin du ConnectivityManager (le service système d'Android) pour obtenir l'adresse IP de l'appareil.
-- **Étape 2b : La boucle de scan (L'approche "brute force")**
-  - La méthode la plus simple est de "pinger" chaque adresse IP du sous-réseau.
-  - **N'utilisez PAS InetAddress.isReachable() !** C'est la méthode Java standard, mais elle est très peu fiable sur Android (elle utilise ICMP, souvent bloqué, ou un port TCP (port 7) jamais ouvert).
-  - **La Vraie Méthode :** Tentez d'ouvrir un Socket sur un port commun (ex: 80, 135, 443) avec un _timeout_ très court (ex: 50-100ms). Si le socket se connecte ou est _refusé_ (Connection Refused), l'hôte est "vivant". S'il _timeout_, l'hôte est "mort".
-- **Étape 2c : Paralléliser avec les Coroutines**
-  - Scanner 254 adresses une par une prendra 2 minutes. C'est trop long.
-  - Vous devez lancer les 254 scans en parallèle.
-  - Avec les Coroutines, c'est incroyablement simple. Vous allez "lancer" 254 "jobs" dans un pool de threads (Dispatchers.IO) et attendre qu'ils soient tous finis.
-  - **Exemple de logique pour un seul scan :**  
-        // Ceci doit être appelé depuis une Coroutine  
-        suspend fun scanIp(ip: String): DeviceInfo? { // DeviceInfo est une data class  
-        return withContext(Dispatchers.IO) { // Change de thread  
-        try {  
-        val socket = Socket()  
-        // Tente de se connecter au port 135 (souvent ouvert sur Windows)  
-        // avec un timeout de 50ms  
-        socket.connect(InetSocketAddress(ip, 135), 50)  
-        socket.close()  
-        // Si on arrive ici, l'hôte est vivant  
-        val hostname = InetAddress.getByName(ip).hostName  
-        return@withContext DeviceInfo(ip, hostname)  
-        } catch (e: Exception) {  
-        // Timeout ou Refus = hôte mort ou port fermé, on ignore  
-        return@withContext null  
-        }  
-        }  
-        }  
+### 1. Scanner Réseau Générique
+* **Objectif** : Rendre l'application compatible avec *tous* les routeurs, et pas seulement les Freebox.
+* **Implémentation** : Activer le `NetworkScanner.kt` comme solution de repli ("fallback"). Si aucune Freebox n'est détectée, l'application lancera un scan "brute force" du sous-réseau (ping de 192.168.x.1 à 254) pour trouver les hôtes actifs et résoudre leur hostname.
+* **Note** : Ce mode générique ne pourra pas récupérer les adresses MAC, en raison des restrictions de sécurité d'Android.
 
-## Phase 3 : L'Alternative (L'API Freebox)
+### 2. Fonctionnalités "Power-User"
+* **Objectif** : Ajouter des outils réseau avancés pour les appareils découverts.
+* **Implémentation** :
+    * **Scan de Ports** : Permettre de sélectionner un appareil pour lancer un scan des ports TCP courants (ex: 22, 80, 443, 8080) afin d'identifier les services ouverts.
+    * **Wake-on-LAN (WoL)** : Ajouter un bouton "Réveiller" qui enverra un "Magic Packet" UDP à l'adresse MAC de l'appareil (disponible via l'API Freebox) pour le sortir de veille.
 
-L'approche "brute force" (Phase 2) est universelle, mais limitée (on ne trouve que les hôtes qui répondent). Vous avez mentionné "ma freebox". C'est un indice clé !
+### 3. Architecture de Persistance
+* **Objectif** : Créer un historique des appareils et suivre les changements sur le réseau.
+* **Implémentation** :
+    * Intégrer la bibliothèque **Room** pour créer une base de données locale.
+    * Sauvegarder chaque appareil scanné avec un `timestamp`.
+    * Afficher un statut "Nouveau" ou "Hors ligne" pour les appareils en comparant les scans actuels avec l'historique en base.
+    * Utiliser **Kotlin Flows** pour exposer les données de Room à l'UI de manière réactive.
 
-**Votre Freebox a une API !** Elle sait _exactement_ qui est connecté.
+### 4. Améliorations UI/UX
+* **Objectif** : Moderniser l'UI et optimiser la gestion des ressources.
+* **Implémentation** :
+    * Remplacer les `ListItem` par des `Card` Material3 pour une meilleure hiérarchie visuelle.
+    * Externaliser la map de correspondance OUI (fabricant) du `DeviceIconMapper.kt` vers un fichier `vendors.json` dans les *assets* de l'application.
 
-- **Documentation :** Cherchez "API Freebox OS" (ou "Freebox SDK").
-- **Principe :**
-  - L'application doit d'abord s'authentifier auprès de la Freebox (<https://www.google.com/search?q=http://mafreebox.freebox.fr/>).
-  - Une fois authentifiée (l'utilisateur devra appuyer sur le bouton de la box), l'application reçoit un token.
-  - Avec ce token, vous pouvez appeler un "endpoint" (une URL) qui vous renvoie un fichier **JSON** avec la liste _complète_ des appareils, leur nom, leur adresse IP, et leur **ADRESSE MAC**.
-- **C'est la méthode "Pro" :** C'est 100% fiable, instantané, et ça ne vide pas la batterie. En revanche, votre application ne fonctionnera _que_ pour les utilisateurs de Freebox.
+---
 
-## Phase 4 : Identification de l'Appareil
+## Installation
 
-C'est votre "si possible". C'est la partie la plus dure.
-
-- **Si vous utilisez l'API Freebox (Phase 3) :** Vous avez l'adresse MAC. L'adresse MAC contient l'**OUI (Organizationally Unique Identifier)**. Les 6 premiers caractères (AA:BB:CC:xx:xx:xx) identifient le fabricant.
-  - Vous pouvez embarquer dans votre application une base de données "OUI-to-Vendor" (il en existe des gratuites).
-  - Si la MAC commence par 9C:20:7B, la base vous dira "Apple, Inc.". Vous pouvez alors afficher une icône .
-- **Si vous utilisez le scan "brute force" (Phase 2) :**
-  - **C'est le mur.** Depuis Android 10, **une application ne peut plus lire la table ARP du système.** Il est impossible pour une application normale d'obtenir l'adresse MAC d'un _autre_ appareil sur le réseau.
-  - Votre seule piste est le hostname (ex: PC-DE-PAUL, android-123456.home). C'est souvent suffisant pour deviner.
-
-## Mon Conseil Stratégique
-
-- Commencez par la **Phase 0 et 1**. Ayez une app avec un bouton et une liste vide.
-- Implémentez la **Phase 2** (scan brute force). Vous aurez la satisfaction de voir les IP et les hostnames apparaître. C'est un super défi d'apprentissage sur les Coroutines.
-- _Ensuite_, si vous voulez une app vraiment puissante (pour vous), attaquez la **Phase 3** (API Freebox). Vous apprendrez à faire des appels réseau (avec des librairies comme **Retrofit** ou **Ktor**) et à analyser du JSON (avec **Kotlinx Serialization**).
-- La **Phase 4** (identification par MAC) n'est possible que si vous réussissez la Phase 3.
-
-Vous avez un projet passionnant devant vous. Prévoyez du temps, ne vous découragez pas face aux erreurs (il y en aura !), et amusez-vous bien.
-
-Voici les fichiers de départ pour vous lancer.
+1.  Clonez ce dépôt :
+    ```sh
+    git clone [https://github.com/](https://github.com/)[VOTRE-NOM-UTILISATEUR]/[NOM-DU-REPO].git
+    ```
+2.  Ouvrez le projet avec la dernière version stable d'Android Studio.
+3.  Connectez un appareil Android en mode débogage USB (l'émulateur ne fonctionnera pas car il n'est pas sur le même réseau WiFi que votre Freebox).
+4.  Compilez et exécutez l'application.
