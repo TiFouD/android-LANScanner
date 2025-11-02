@@ -144,7 +144,25 @@ class MainViewModel : ViewModel() {
             val serviceInfo = manager.discoverFreebox()
 
             if (serviceInfo != null) {
-                freeboxApiUrl = "http://${serviceInfo.host.hostAddress}:${serviceInfo.port}"
+
+                // Logs show that serviceInfo.port is 80 (HTTP)
+                // and https_port=57461 (for REMOTE access, which causes "Connection refused" locally).
+                // If HTTPS is available (https_available=1), the local port is
+                // almost certainly the standard port 443.
+
+                val host = serviceInfo.host.hostAddress
+
+                if (host != null) {
+                    // Use the standard HTTPS port
+                    val httpsPort = 443
+                    freeboxApiUrl = "https://$host:$httpsPort"
+                    Log.i("MainViewModel", "Freebox found. Attempting HTTPS connection on standard port 443: $freeboxApiUrl")
+                } else {
+                    Log.e("MainViewModel", "Freebox found but host IP address is null.")
+                    freeboxAuthState = FreeboxAuthState.Error("Hôte Freebox introuvable")
+                    return@launch
+                }
+
                 if (manager.appToken != null) {
                     if (manager.openSession(freeboxApiUrl!!)) {
                         withContext(Dispatchers.Main) {
