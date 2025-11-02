@@ -25,7 +25,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -163,6 +162,7 @@ class MainViewModel : ViewModel() {
 
                 val genericDevices = withContext(Dispatchers.IO) {
                     scanner.startScan()
+
                 }
 
                 withContext(Dispatchers.Main) {
@@ -184,7 +184,7 @@ class MainViewModel : ViewModel() {
             freeboxAuthState = FreeboxAuthState.Authorizing(authResponse.result!!.track_id)
             trackAuthorization(manager,authResponse.result.track_id)
         } else {
-            freeboxAuthState = FreeboxAuthState.Error("Échec de l'authentification")
+            freeboxAuthState = FreeboxAuthState.Error("Authentication failed")
         }
     }
 
@@ -205,21 +205,21 @@ class MainViewModel : ViewModel() {
                                 freeboxAuthState = FreeboxAuthState.Authorized
                                 fetchDevices()
                             } else {
-                                freeboxAuthState = FreeboxAuthState.Error("Impossible d'ouvrir la session")
+                                freeboxAuthState = FreeboxAuthState.Error("Failed to open session")
                             }
                         }
                         "timeout" -> {
-                            freeboxAuthState = FreeboxAuthState.Error("Délai d'autorisation expiré")
+                            freeboxAuthState = FreeboxAuthState.Error("Authorization timed out")
                         }
                         "denied" -> {
-                            freeboxAuthState = FreeboxAuthState.Error("Autorisation refusée")
+                            freeboxAuthState = FreeboxAuthState.Error("Authorization denied")
                         }
                         "pending" -> {
 
                         }
                     }
                 } else {
-                    freeboxAuthState = FreeboxAuthState.Error("Impossible de suivre le processus d'authentification")
+                    freeboxAuthState = FreeboxAuthState.Error("Failed to track authentication process")
                 }
                 if (freeboxAuthState is FreeboxAuthState.Authorizing) {
                     kotlinx.coroutines.delay(1000)
@@ -235,7 +235,10 @@ class MainViewModel : ViewModel() {
     fun fetchDevices() {
         freeboxManager ?: return
         viewModelScope.launch(Dispatchers.IO) {
-            discoveredDevices = freeboxManager!!.getLanDevices(freeboxApiUrl!!)
+            val devices = freeboxManager!!.getLanDevices(freeboxApiUrl!!)
+            withContext(Dispatchers.Main) {
+                discoveredDevices = devices
+            }
         }
     }
 
@@ -264,19 +267,20 @@ class MainViewModel : ViewModel() {
 
 
 /**
- * Activité principale de l'application. Elle configure le contenu de l'interface utilisateur
- * en utilisant Jetpack Compose et affiche le [NetworkScannerScreen].
+ * Main activity of the application. It sets up the user interface content
+ * using Jetpack Compose and displays the [NetworkScannerScreen].
  */
 class MainActivity : ComponentActivity() {
     /**
-     * Appelé lorsque l'activité est créée pour la première fois.
+     * Called when the activity is first created.
      *
-     * @param savedInstanceState Si l'activité est recréée après avoir été précédemment détruite,
-     *                           il s'agit du Bundle que l'activité a fourni pour l'enregistrer son état.
-     *                           Sinon, c'est null.
+     * @param savedInstanceState If the activity is being re-initialized after
+     *                           previously being shut down then this Bundle contains the data it most recently
+     *                           supplied in [onSaveInstanceState].  **Note: Otherwise it is null.**
      */
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        DeviceIconMapper.init(applicationContext)
         setContent {
             LANScannerTheme {
                 NetworkScannerScreen()
@@ -286,10 +290,10 @@ class MainActivity : ComponentActivity() {
 }
 
 /**
- * Écran principal du scanner de réseau, affichant l'état de la connexion Freebox
- * et la liste des appareils découverts.
+ * Main network scanner screen, displaying the Freebox connection status
+ * and the list of discovered devices.
  *
- * @param viewModel Le [MainViewModel] qui gère la logique d'état et d'interaction.
+ * @param viewModel The [MainViewModel] which handles the state and interaction logic.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -320,7 +324,7 @@ fun NetworkScannerScreen(viewModel: MainViewModel = viewModel()) {
                             onDismissRequest = { menuExpanded = false }
                         ) {
                             DropdownMenuItem(
-                                text = { Text("Oublier la Freebox") },
+                                text = { Text("Oublier la Freebox") }, // "Forget Freebox"
                                 onClick = {
                                     viewModel.forgetFreebox(context)
                                     menuExpanded = false
@@ -343,27 +347,27 @@ fun NetworkScannerScreen(viewModel: MainViewModel = viewModel()) {
             when (freeboxState) {
                 is FreeboxAuthState.Idle -> {
                     Button(onClick = { viewModel.startFreeboxAuth(context) }) {
-                        Text("Connexion au réseau")
+                        Text("Connexion au réseau") // "Connect to network"
                     }
                 }
                 is FreeboxAuthState.Discovering -> {
                     CircularProgressIndicator()
-                    Text("Scan du réseau en cours...")
+                    Text("Scan du réseau en cours...") // "Network scan in progress..."
                 }
                 is FreeboxAuthState.Authorizing -> {
                     CircularProgressIndicator()
-                    Text("Veuillez autoriser la demande sur votre Freebox")
+                    Text("Veuillez autoriser la demande sur votre Freebox") // "Please authorize the request on your Freebox"
                 }
                 is FreeboxAuthState.Authorized -> {
-                    Text("Connecté à la Freebox")
-                    Button(onClick = { viewModel.fetchDevices() }) {
-                        Text("Rafraichir les appareils")
+                    Text("Scan terminé. ${viewModel.discoveredDevices.size} appareils trouvés.") // "Scan complete. ${viewModel.discoveredDevices.size} devices found."
+                    Button(onClick = { viewModel.startFreeboxAuth(context) }) {
+                        Text("Relancer un scan") // "Relaunch scan"
                     }
                 }
                 is FreeboxAuthState.Error -> {
                     Text(freeboxState.message)
                     Button(onClick = { viewModel.startFreeboxAuth(context) }) {
-                        Text("Rééssayer")
+                        Text("Rééssayer") // "Retry"
                     }
                 }
             }
@@ -373,7 +377,6 @@ fun NetworkScannerScreen(viewModel: MainViewModel = viewModel()) {
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 items(viewModel.discoveredDevices) { device ->
                     DeviceItem(device)
-                    HorizontalDivider()
                 }
             }
         }
@@ -381,13 +384,15 @@ fun NetworkScannerScreen(viewModel: MainViewModel = viewModel()) {
 }
 
 /**
- * Un composable qui affiche un seul élément d'appareil découvert.
+ * A composable that displays a single discovered device item.
  *
- * @param device Les informations sur l'appareil à afficher.
+ * @param device The device information to display.
  */
 @Composable
 fun DeviceItem(device: DeviceInfo) {
+    // Retrieves the icon AND the manufacturer name
     val icon = DeviceIconMapper.getIconForDevice(device.mac)
+    val vendorName = DeviceIconMapper.getVendorName(device.mac)
 
     Card(
         colors = CardDefaults.cardColors(
@@ -395,7 +400,7 @@ fun DeviceItem(device: DeviceInfo) {
         ),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(8.dp)
+            .padding(vertical = 4.dp, horizontal = 8.dp) // Adjusted padding
     ) {
         Column(
             modifier = Modifier
@@ -408,16 +413,24 @@ fun DeviceItem(device: DeviceInfo) {
             ) {
                 Icon(
                     imageVector = icon,
-                    contentDescription = "Icone de l'appareil",
+                    contentDescription = "Icone de l'appareil", // "Device icon"
                     modifier = Modifier
                         .size(40.dp)
                         .padding(end = 16.dp)
                 )
-                Text(
-                    text = device.hostname.ifBlank { "Appareil inconnu" },
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f)
-                )
+
+                // Column for title + manufacturer
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = device.hostname.ifBlank { "Appareil inconnu" }, // "Unknown device"
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Text(
+                        text = vendorName, // Displays the manufacturer name
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -433,7 +446,7 @@ fun DeviceItem(device: DeviceInfo) {
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "MAC: ${device.mac ?: "N/A"}",
+                    text = "MAC: ${device.mac ?: "N/A"}", // Handles null MAC
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
