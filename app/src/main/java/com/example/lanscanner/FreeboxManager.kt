@@ -1,5 +1,6 @@
 package com.example.lanscanner
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
@@ -20,6 +21,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.Closeable
 import java.util.concurrent.CountDownLatch
+import java.security.cert.X509Certificate
+import javax.net.ssl.X509TrustManager
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import androidx.core.content.edit
@@ -187,6 +190,20 @@ class FreeboxManager(private val context: Context) : Closeable {
                 ignoreUnknownKeys = true
                 prettyPrint = true
             })
+        }
+        engine {
+            https {
+                trustManager = @SuppressLint("CustomX509TrustManager")
+                object : X509TrustManager {
+                    // In context of this app, we don't care about the certificate
+                    // It is used only to connect to the Freebox with https
+                    @SuppressLint("TrustAllX509TrustManager")
+                    override fun checkClientTrusted(p0: Array<out X509Certificate>?, p1: String?) {}
+                    @SuppressLint("TrustAllX509TrustManager")
+                    override fun checkServerTrusted(p0: Array<out X509Certificate>?, p1: String?) {}
+                    override fun getAcceptedIssuers(): Array<X509Certificate>? = null
+                }
+            }
         }
     }
 
