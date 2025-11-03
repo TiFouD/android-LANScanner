@@ -1,10 +1,12 @@
 package com.example.lanscanner
 
+import android.app.Application
 import android.content.Context
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,8 +16,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Button
@@ -33,19 +37,30 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.lanscanner.database.AppDatabase
+import com.example.lanscanner.database.DeviceEntity
+import com.example.lanscanner.database.DeviceRepository
 import com.example.lanscanner.ui.theme.LANScannerTheme
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -57,20 +72,24 @@ sealed class FreeboxAuthState {
      * Initial state, no action has been taken.
      */
     object Idle : FreeboxAuthState()
+
     /**
      * Freebox discovery is in progress.
      */
     object Discovering : FreeboxAuthState()
+
     /**
      * Authorization is pending on the Freebox.
      *
      * @param trackId The tracking ID for the authorization process.
      */
     data class Authorizing(val trackId: Int) : FreeboxAuthState()
+
     /**
      * Freebox is authorized and connected.
      */
     object Authorized : FreeboxAuthState()
+
     /**
      * An error occurred during the Freebox authentication process.
      *
@@ -84,24 +103,59 @@ sealed class FreeboxAuthState {
  * ViewModel for the main activity, handling network scanning and Freebox authentication logic.
  */
 @Suppress("DEPRECATION")
-class MainViewModel : ViewModel() {
-    /**
-     * The current authentication state with the Freebox.
-     */
+class MainViewModel(application: Application) : AndroidViewModel(application) {
+
     var freeboxAuthState by mutableStateOf<FreeboxAuthState>(FreeboxAuthState.Idle)
     private var freeboxManager: FreeboxManager? = null
     private var networkScanner: NetworkScanner? = null
     private var freeboxApiUrl: String? = null
-    /**
-     * List of discovered network devices.
-     */
-    var discoveredDevices by mutableStateOf<List<DeviceInfo>>(emptyList())
+
+    private val repository: DeviceRepository = DeviceRepository(AppDatabase.getInstance(application).deviceDao())
+
+    // Source 1: Database (for Freebox / History)
+    private val historicalDevicesFlow = repository.allDevices
+        .map { dbList ->
+            // Converts the list of DB entities (DeviceEntity) to a list of UI objects (UiDevice)
+            dbList
+                .filter { it.ip.contains(".") } // Filter out IPv6 addresses
+                .map { dbDevice ->
+                    UiDevice(
+                        ip = dbDevice.ip,
+                        hostname = dbDevice.hostname,
+                        mac = dbDevice.mac,
+                        isOnline = dbDevice.isOnline
+                    )
+                }
+                .sortedBy { device -> // Sort the list by IP address.
+                    device.ip.split(".").map { it.toInt() }
+                        .let { it[0] * 1_000_000 + it[1] * 1_000 + it[2] * 100 + it[3] }
+                }
+        }
+
+    // Source 2: Generic Scan (Fallback)
+    private val _genericScanDevices = MutableStateFlow<List<UiDevice>>(emptyList())
+
+    // The "Selector" between historical and generic scan data
+    private val _isGenericScanActive = MutableStateFlow(false)
 
     /**
-     * Returns an instance of [FreeboxManager], creating it if it doesn't exist.
+     * The final list of devices to be displayed on the UI.
+     */
+    val displayDevices: StateFlow<List<UiDevice>> =
+        _isGenericScanActive.flatMapLatest { isGeneric ->
+            if (isGeneric) {
+                _genericScanDevices
+            } else {
+                historicalDevicesFlow
+            }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+
+    /**
+     * Gets a singleton instance of [FreeboxManager].
      *
      * @param context The application context.
-     * @return The [FreeboxManager] instance.
+     * @return The singleton [FreeboxManager] instance.
      */
     private fun getManager(context: Context): FreeboxManager {
         if (freeboxManager == null) {
@@ -111,12 +165,12 @@ class MainViewModel : ViewModel() {
     }
 
     /**
-     * Returns an instance of [NetworkScanner], creating it if it doesn't exist.
+     * Gets a singleton instance of [NetworkScanner].
      *
      * @param context The application context.
-     * @return The [NetworkScanner] instance.
+     * @return The singleton [NetworkScanner] instance.
      */
-    private fun getScanner(context : Context): NetworkScanner {
+    private fun getScanner(context: Context): NetworkScanner {
         if (networkScanner == null) {
             networkScanner = NetworkScanner(context.applicationContext)
         }
@@ -124,10 +178,7 @@ class MainViewModel : ViewModel() {
     }
 
     /**
-     * Initiates the Freebox authentication process. If a Freebox is not found,
-     * it falls back to a general network scan.
-     *
-     * @param context The application context.
+     * Initiates the Freebox authentication process.
      */
     fun startFreeboxAuth(context: Context) {
         val manager = getManager(context)
@@ -136,24 +187,14 @@ class MainViewModel : ViewModel() {
         viewModelScope.launch {
             freeboxAuthState = FreeboxAuthState.Discovering
 
-            // Perform discovery on IO dispatcher
-            /*val serviceInfo = withContext(Dispatchers.IO) {
-                // Replace with actual discovery logic if available, currently null
-                //null
-            }*/
             val serviceInfo = manager.discoverFreebox()
 
             if (serviceInfo != null) {
-
-                // Logs show that serviceInfo.port is 80 (HTTP)
-                // and https_port=57461 (for REMOTE access, which causes "Connection refused" locally).
-                // If HTTPS is available (https_available=1), the local port is
-                // almost certainly the standard port 443.
+                // Case 1: Freebox found on the network
+                _isGenericScanActive.value = false
 
                 val host = serviceInfo.host.hostAddress
-
                 if (host != null) {
-                    // Use the standard HTTPS port
                     val httpsPort = 443
                     freeboxApiUrl = "https://$host:$httpsPort"
                     Log.i("MainViewModel", "Freebox found. Attempting HTTPS connection on standard port 443: $freeboxApiUrl")
@@ -167,7 +208,7 @@ class MainViewModel : ViewModel() {
                     if (manager.openSession(freeboxApiUrl!!)) {
                         withContext(Dispatchers.Main) {
                             freeboxAuthState = FreeboxAuthState.Authorized
-                            fetchDevices()
+                            fetchDevices() // Update the database
                         }
                     } else {
                         requestAuthorization(manager)
@@ -176,15 +217,31 @@ class MainViewModel : ViewModel() {
                     requestAuthorization(manager)
                 }
             } else {
+                // Case 2: Freebox not found, start a generic scan
                 Log.w("MainViewModel", "Freebox not found. Starting general scan...")
 
+                // 1. Activate generic scan mode
+                _isGenericScanActive.value = true
+
+                // 2. Start the scan
                 val genericDevices = withContext(Dispatchers.IO) {
                     scanner.startScan()
-
                 }
 
+                // 3. Update the generic scan flow
+                _genericScanDevices.value = genericDevices
+                    .filter { it.ip.contains(".") } // Filter out IPv6 addresses
+                    .map {
+                        // All devices are "online" because this is a live scan
+                        UiDevice(it.ip, it.hostname, it.mac, true)
+                    }
+                    .sortedBy { device -> // Sort for consistency
+                        device.ip.split(".").map { it.toInt() }
+                            .let { it[0] * 1_000_000 + it[1] * 1_000 + it[2] * 100 + it[3] }
+                    }
+
+                // 4. Update the UI state
                 withContext(Dispatchers.Main) {
-                    discoveredDevices = genericDevices
                     freeboxAuthState = FreeboxAuthState.Authorized
                 }
             }
@@ -194,22 +251,22 @@ class MainViewModel : ViewModel() {
     /**
      * Requests authorization from the Freebox.
      *
-     * @param manager The [FreeboxManager] instance.
+     * @param manager The [FreeboxManager] instance to use.
      */
     private suspend fun requestAuthorization(manager: FreeboxManager) {
         val authResponse = manager.requestAuthorization(freeboxApiUrl!!)
         if (authResponse.success) {
             freeboxAuthState = FreeboxAuthState.Authorizing(authResponse.result!!.track_id)
-            trackAuthorization(manager,authResponse.result.track_id)
+            trackAuthorization(manager, authResponse.result.track_id)
         } else {
             freeboxAuthState = FreeboxAuthState.Error("Authentication failed")
         }
     }
 
     /**
-     * Tracks the authorization progress with the Freebox until it's granted, denied, or times out.
+     * Tracks the authorization progress with the Freebox.
      *
-     * @param manager The [FreeboxManager] instance.
+     * @param manager The [FreeboxManager] instance to use.
      * @param trackId The tracking ID for the authorization process.
      */
     private fun trackAuthorization(manager: FreeboxManager, trackId: Int) {
@@ -233,7 +290,7 @@ class MainViewModel : ViewModel() {
                             freeboxAuthState = FreeboxAuthState.Error("Authorization denied")
                         }
                         "pending" -> {
-
+                            // Do nothing, just wait
                         }
                     }
                 } else {
@@ -247,31 +304,53 @@ class MainViewModel : ViewModel() {
     }
 
     /**
-     * Fetches the list of LAN devices from the Freebox.
-     * Requires an active session.
+     * Fetches the list of LAN devices from the Freebox. (Freebox/History Mode)
      */
     fun fetchDevices() {
+        _isGenericScanActive.value = false
+
         freeboxManager ?: return
         viewModelScope.launch(Dispatchers.IO) {
-            val devices = freeboxManager!!.getLanDevices(freeboxApiUrl!!)
-            withContext(Dispatchers.Main) {
-                discoveredDevices = devices
+            repository.setAllDevicesOffline()
+            val liveDevices = freeboxManager!!.getLanDevices(freeboxApiUrl!!)
+            val timestamp = System.currentTimeMillis()
+
+            for (device in liveDevices) {
+                if (device.mac != null) {
+                    repository.upsertDevice(DeviceEntity(
+                        mac = device.mac,
+                        ip = device.ip,
+                        hostname = device.hostname.ifBlank { "Appareil inconnu" },
+                        lastSeen = timestamp,
+                        isOnline = true
+                    ))
+                }
             }
         }
     }
 
     /**
      * Clears the stored Freebox authorization and resets the UI state.
-     *
-     * @param context The application context.
      */
     fun forgetFreebox(context: Context) {
         val manager = getManager(context)
         viewModelScope.launch {
             manager.forgetAuthorization()
+            repository.clearAllDevices() // Clear the database
+            _isGenericScanActive.value = false // Revert to history mode (which will be empty)
             freeboxAuthState = FreeboxAuthState.Idle
-            discoveredDevices = emptyList()
         }
+    }
+
+    /**
+     * Forces a new network scan.
+     */
+    fun rescanNetwork(context: Context) {
+        freeboxManager?.close()
+        freeboxManager = null
+        _genericScanDevices.value = emptyList()
+
+        startFreeboxAuth(context)
     }
 
     /**
@@ -320,6 +399,8 @@ fun NetworkScannerScreen(viewModel: MainViewModel = viewModel()) {
 
     var menuExpanded by remember { mutableStateOf(false) }
 
+    val devices by viewModel.displayDevices.collectAsState()
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -342,7 +423,7 @@ fun NetworkScannerScreen(viewModel: MainViewModel = viewModel()) {
                             onDismissRequest = { menuExpanded = false }
                         ) {
                             DropdownMenuItem(
-                                text = { Text("Oublier la Freebox") }, // "Forget Freebox"
+                                text = { Text("Oublier la Freebox") },
                                 onClick = {
                                     viewModel.forgetFreebox(context)
                                     menuExpanded = false
@@ -365,27 +446,27 @@ fun NetworkScannerScreen(viewModel: MainViewModel = viewModel()) {
             when (freeboxState) {
                 is FreeboxAuthState.Idle -> {
                     Button(onClick = { viewModel.startFreeboxAuth(context) }) {
-                        Text("Connexion au réseau") // "Connect to network"
+                        Text("Connexion au réseau")
                     }
                 }
                 is FreeboxAuthState.Discovering -> {
                     CircularProgressIndicator()
-                    Text("Scan du réseau en cours...") // "Network scan in progress..."
+                    Text("Scan du réseau en cours...")
                 }
                 is FreeboxAuthState.Authorizing -> {
                     CircularProgressIndicator()
-                    Text("Veuillez autoriser la demande sur votre Freebox") // "Please authorize the request on your Freebox"
+                    Text("Veuillez autoriser la demande sur votre Freebox")
                 }
                 is FreeboxAuthState.Authorized -> {
-                    Text("Scan terminé. ${viewModel.discoveredDevices.size} appareils trouvés.") // "Scan complete. ${viewModel.discoveredDevices.size} devices found."
-                    Button(onClick = { viewModel.startFreeboxAuth(context) }) {
-                        Text("Relancer un scan") // "Relaunch scan"
+                    Text("Scan terminé. ${devices.size} appareils trouvés.")
+                    Button(onClick = { viewModel.rescanNetwork(context) }) {
+                        Text("Relancer un scan")
                     }
                 }
                 is FreeboxAuthState.Error -> {
                     Text(freeboxState.message)
                     Button(onClick = { viewModel.startFreeboxAuth(context) }) {
-                        Text("Rééssayer") // "Retry"
+                        Text("Rééssayer")
                     }
                 }
             }
@@ -393,7 +474,7 @@ fun NetworkScannerScreen(viewModel: MainViewModel = viewModel()) {
             Spacer(modifier = Modifier.height(16.dp))
 
             LazyColumn(modifier = Modifier.fillMaxSize()) {
-                items(viewModel.discoveredDevices) { device ->
+                items(devices, key = { it.mac ?: it.ip }) { device ->
                     DeviceItem(device)
                 }
             }
@@ -407,8 +488,7 @@ fun NetworkScannerScreen(viewModel: MainViewModel = viewModel()) {
  * @param device The device information to display.
  */
 @Composable
-fun DeviceItem(device: DeviceInfo) {
-    // Retrieves the icon AND the manufacturer name
+fun DeviceItem(device: UiDevice) {
     val icon = DeviceIconMapper.getIconForDevice(device.mac)
     val vendorName = DeviceIconMapper.getVendorName(device.mac)
 
@@ -418,7 +498,7 @@ fun DeviceItem(device: DeviceInfo) {
         ),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp, horizontal = 8.dp) // Adjusted padding
+            .padding(vertical = 4.dp, horizontal = 8.dp)
     ) {
         Column(
             modifier = Modifier
@@ -429,22 +509,32 @@ fun DeviceItem(device: DeviceInfo) {
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .background(
+                            color = if (device.isOnline) Color.Green else Color.Red,
+                            shape = CircleShape
+                        )
+                )
+
+                Spacer(modifier = Modifier.width(12.dp))
+
                 Icon(
                     imageVector = icon,
-                    contentDescription = "Icone de l'appareil", // "Device icon"
+                    contentDescription = "Icone de l'appareil",
                     modifier = Modifier
                         .size(40.dp)
                         .padding(end = 16.dp)
                 )
 
-                // Column for title + manufacturer
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = device.hostname.ifBlank { "Appareil inconnu" }, // "Unknown device"
+                        text = device.hostname.ifBlank { "Appareil inconnu" },
                         style = MaterialTheme.typography.titleMedium,
                     )
                     Text(
-                        text = vendorName, // Displays the manufacturer name
+                        text = vendorName,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -464,7 +554,7 @@ fun DeviceItem(device: DeviceInfo) {
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "MAC: ${device.mac ?: "N/A"}", // Handles null MAC
+                    text = "MAC: ${device.mac ?: "N/A"}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
