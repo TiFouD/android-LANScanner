@@ -6,7 +6,13 @@ import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -29,11 +35,13 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -55,6 +63,7 @@ import com.example.lanscanner.database.DeviceEntity
 import com.example.lanscanner.database.DeviceRepository
 import com.example.lanscanner.ui.theme.LANScannerTheme
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -110,7 +119,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var networkScanner: NetworkScanner? = null
     private var freeboxApiUrl: String? = null
 
-    private val repository: DeviceRepository = DeviceRepository(AppDatabase.getInstance(application).deviceDao())
+    private val repository: DeviceRepository =
+        DeviceRepository(AppDatabase.getInstance(application).deviceDao())
 
     // Source 1: Database (for Freebox / History)
     private val historicalDevicesFlow = repository.allDevices
@@ -141,6 +151,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /**
      * The final list of devices to be displayed on the UI.
      */
+    @OptIn(ExperimentalCoroutinesApi::class)
     val displayDevices: StateFlow<List<UiDevice>> =
         _isGenericScanActive.flatMapLatest { isGeneric ->
             if (isGeneric) {
@@ -197,7 +208,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (host != null) {
                     val httpsPort = 443
                     freeboxApiUrl = "https://$host:$httpsPort"
-                    Log.i("MainViewModel", "Freebox found. Attempting HTTPS connection on standard port 443: $freeboxApiUrl")
+                    Log.i(
+                        "MainViewModel",
+                        "Freebox found. Attempting HTTPS connection on standard port 443: $freeboxApiUrl"
+                    )
                 } else {
                     Log.e("MainViewModel", "Freebox found but host IP address is null.")
                     freeboxAuthState = FreeboxAuthState.Error("Hôte Freebox introuvable")
@@ -283,18 +297,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                 freeboxAuthState = FreeboxAuthState.Error("Failed to open session")
                             }
                         }
+
                         "timeout" -> {
                             freeboxAuthState = FreeboxAuthState.Error("Authorization timed out")
                         }
+
                         "denied" -> {
                             freeboxAuthState = FreeboxAuthState.Error("Authorization denied")
                         }
+
                         "pending" -> {
                             // Do nothing, just wait
                         }
                     }
                 } else {
-                    freeboxAuthState = FreeboxAuthState.Error("Failed to track authentication process")
+                    freeboxAuthState =
+                        FreeboxAuthState.Error("Failed to track authentication process")
                 }
                 if (freeboxAuthState is FreeboxAuthState.Authorizing) {
                     kotlinx.coroutines.delay(1000)
@@ -317,13 +335,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             for (device in liveDevices) {
                 if (device.mac != null) {
-                    repository.upsertDevice(DeviceEntity(
-                        mac = device.mac,
-                        ip = device.ip,
-                        hostname = device.hostname.ifBlank { "Appareil inconnu" },
-                        lastSeen = timestamp,
-                        isOnline = true
-                    ))
+                    repository.upsertDevice(
+                        DeviceEntity(
+                            mac = device.mac,
+                            ip = device.ip,
+                            hostname = device.hostname.ifBlank { "Appareil inconnu" },
+                            lastSeen = timestamp,
+                            isOnline = true
+                        )
+                    )
                 }
             }
         }
@@ -449,20 +469,24 @@ fun NetworkScannerScreen(viewModel: MainViewModel = viewModel()) {
                         Text("Connexion au réseau")
                     }
                 }
+
                 is FreeboxAuthState.Discovering -> {
                     CircularProgressIndicator()
                     Text("Scan du réseau en cours...")
                 }
+
                 is FreeboxAuthState.Authorizing -> {
                     CircularProgressIndicator()
                     Text("Veuillez autoriser la demande sur votre Freebox")
                 }
+
                 is FreeboxAuthState.Authorized -> {
                     Text("Scan terminé. ${devices.size} appareils trouvés.")
                     Button(onClick = { viewModel.rescanNetwork(context) }) {
                         Text("Relancer un scan")
                     }
                 }
+
                 is FreeboxAuthState.Error -> {
                     Text(freeboxState.message)
                     Button(onClick = { viewModel.startFreeboxAuth(context) }) {
@@ -492,18 +516,22 @@ fun DeviceItem(device: UiDevice) {
     val icon = DeviceIconMapper.getIconForDevice(device.mac)
     val vendorName = DeviceIconMapper.getVendorName(device.mac)
 
+    var isExpanded by remember { mutableStateOf(false) }
+
     Card(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
         ),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp, horizontal = 8.dp)
+            .padding(vertical = 4.dp, horizontal = 8.dp),
+        onClick = { isExpanded = !isExpanded }
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp)
+                .animateContentSize(animationSpec = tween(300))
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -559,6 +587,51 @@ fun DeviceItem(device: UiDevice) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = fadeIn(animationSpec = tween(300)),
+                exit = fadeOut(animationSpec = tween(0))
+
+            ) {
+                PowerUserActions(device = device)
+            }
+        }
+    }
+}
+
+@Composable
+fun PowerUserActions(device: UiDevice) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 16.dp)
+    ) {
+        HorizontalDivider(
+            modifier = Modifier.padding(bottom = 12.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+        )
+
+        Text(
+            text = "Actions avancées",
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceAround
+        ) {
+            // TODO: Implement port scanning
+            TextButton(onClick = { /* port scanning logic */ }) {
+                Text("Scanner les ports")
+            }
+
+            // TODO: Implement Wake-on-LAN
+            TextButton(onClick = { /* wake on lan logic */ }, enabled = device.mac != null) {
+                Text("Wake-on-LAN")
+            }
+
         }
     }
 }

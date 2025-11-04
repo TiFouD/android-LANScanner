@@ -26,26 +26,37 @@ object DeviceIconMapper {
     // The icons remain the same
     /** Icon for a router device. */
     val ROUTER_ICON = Icons.Default.Router
+
     /** Icon for a personal computer. */
     val PC_ICON = Icons.Default.Computer
+
     /** Icon for an Android phone. */
     val PHONE_ICON = Icons.Default.PhoneAndroid
+
     /** Icon for an Apple iPhone. */
     val APPLE_ICON = Icons.Default.PhoneIphone
+
     /** Icon for a Google smart display or similar device. */
     val GOOGLE_ICON = Icons.Default.SmartDisplay
+
     /** Icon for a Samsung TV or similar device. */
     val SAMSUNG_ICON = Icons.Default.Tv
+
     /** Icon for a generic TV. */
     val TV_ICON = Icons.Default.Tv
+
     /** Icon for a smart home device or remote. */
     val SMART_DEVICE_ICON = Icons.Default.SettingsRemote
+
     /** Icon for a gaming console. */
     val CONSOLE_ICON = Icons.Default.VideogameAsset
+
     /** Icon for a printer. */
     val PRINTER_ICON = Icons.Default.Print
+
     /** Icon for a generic network device. */
     val NETWORK_ICON = Icons.Default.SettingsEthernet
+
     /** Icon for an unknown device. */
     val UNKNOWN_ICON = Icons.Default.QuestionMark
 
@@ -54,6 +65,7 @@ object DeviceIconMapper {
      * e.g.: "b827eb" -> "Raspberry Pi Foundation"
      */
     private var ouiToVendorMap: Map<String, String> = emptyMap()
+
     /** Indicates if the OUI database has been initialized. */
     private var isInitialized = false
 

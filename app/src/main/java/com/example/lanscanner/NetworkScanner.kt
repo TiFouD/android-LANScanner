@@ -91,7 +91,7 @@ class NetworkScanner(private val context: Context) {
 
         Log.e(TAG, "No subnet found after checking all link addresses.")
         return null
-        }
+    }
 
     /**
      * Scans a single IP address to determine if a device is reachable and attempts to resolve its hostname.

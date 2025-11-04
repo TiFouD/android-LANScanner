@@ -198,9 +198,13 @@ class FreeboxManager(private val context: Context) : Closeable {
                     // In context of this app, we don't care about the certificate
                     // It is used only to connect to the Freebox with https
                     @SuppressLint("TrustAllX509TrustManager")
-                    override fun checkClientTrusted(p0: Array<out X509Certificate>?, p1: String?) {}
+                    override fun checkClientTrusted(p0: Array<out X509Certificate>?, p1: String?) {
+                    }
+
                     @SuppressLint("TrustAllX509TrustManager")
-                    override fun checkServerTrusted(p0: Array<out X509Certificate>?, p1: String?) {}
+                    override fun checkServerTrusted(p0: Array<out X509Certificate>?, p1: String?) {
+                    }
+
                     override fun getAcceptedIssuers(): Array<X509Certificate>? = null
                 }
             }
@@ -276,7 +280,11 @@ class FreeboxManager(private val context: Context) : Closeable {
         }
 
         try {
-            nsdManager.discoverServices("_fbx-api._tcp.", NsdManager.PROTOCOL_DNS_SD, discoveryListener)
+            nsdManager.discoverServices(
+                "_fbx-api._tcp.",
+                NsdManager.PROTOCOL_DNS_SD,
+                discoveryListener
+            )
             latch.await()
         } catch (e: Exception) {
             Log.e(TAG, "Error during service discovery", e)
@@ -321,8 +329,12 @@ class FreeboxManager(private val context: Context) : Closeable {
      * @param trackId The track ID obtained from the initial authorization request.
      * @return A [TrackAuthorizationProgressResponse] indicating the current status.
      */
-    suspend fun trackAuthorizationProgress(freeboxApiUrl: String, trackId: Int): TrackAuthorizationProgressResponse {
-        val response: HttpResponse = httpClient.get("$freeboxApiUrl/api/v4/login/authorize/$trackId")
+    suspend fun trackAuthorizationProgress(
+        freeboxApiUrl: String,
+        trackId: Int
+    ): TrackAuthorizationProgressResponse {
+        val response: HttpResponse =
+            httpClient.get("$freeboxApiUrl/api/v4/login/authorize/$trackId")
         return response.body()
     }
 
@@ -344,10 +356,11 @@ class FreeboxManager(private val context: Context) : Closeable {
         val password = hmacSha1(challenge, appToken!!)
 
         // 2. Send challenge response
-        val sessionResponse: LoginResponse = httpClient.post("$freeboxApiUrl/api/v4/login/session/") {
-            contentType(ContentType.Application.Json)
-            setBody(mapOf("app_id" to "com.example.lanscanner", "password" to password))
-        }.body()
+        val sessionResponse: LoginResponse =
+            httpClient.post("$freeboxApiUrl/api/v4/login/session/") {
+                contentType(ContentType.Application.Json)
+                setBody(mapOf("app_id" to "com.example.lanscanner", "password" to password))
+            }.body()
 
         if (sessionResponse.success) {
             sessionToken = sessionResponse.result?.session_token
@@ -377,7 +390,7 @@ class FreeboxManager(private val context: Context) : Closeable {
                 DeviceInfo(
                     activeIp,
                     device.primary_name,
-                mac = macAddress
+                    mac = macAddress
                 )
             } else {
                 null
