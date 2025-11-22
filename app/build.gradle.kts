@@ -60,6 +60,7 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.compose.material.icons.extended)
+    testImplementation("io.mockk:mockk:1.13.8")
 
     // Ktor for networking
     implementation(libs.ktor.client.core)
